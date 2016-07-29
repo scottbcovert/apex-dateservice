@@ -10,27 +10,32 @@ public with sharing class DateService
 	/** End key for date[time] map */
 	public static final String END_KEY = 'End';
 	/** Identifier for date literal containing _N_ */
-	private static final String N_ID = '_N_';
+	@TestVisible private static final String N_ID = '_N_';
 	/** Identifier for date literal containing _AGO */
-	private static final String AGO_ID = '_AGO';
+	@TestVisible private static final String AGO_ID = '_AGO';		
 	/** Identifier for date literal containing _90_ */
 	private static final String NINETY_ID = '_90_';
+	/** Message to relay unspecified n error */
+	@TestVisible private static final String UNSPECIFIED_N_ERROR_MESSAGE = 'DateService Error: You must specify an \'N\' value for this date literal!';
 	/** List of date literal identifier values */
-	private static final List<String> DL_IDS = new List<String>{ N_ID, AGO_ID, '_FISCAL_', '_' };	
+	private static final List<String> DL_IDS = new List<String>{ N_ID, AGO_ID, '_FISCAL', '_' };	
 	/** Mapping of offset names by corresponding integer values for date literals */
 	private static final Map<String,Integer> NAME_BY_OFFSET = new Map<String,Integer>{ 'LAST' => -1, 'THIS' => 0, 'NEXT' => 1};
 	/** List of special single day date literals */
 	private static final List<String> DAY_PERIODS = new List<String>{ 'YESTERDAY', 'TODAY', 'TOMORROW'};
+	/** Stores a test time to use for Apex unit tests */
+	@TestVisible private static final Time TEST_TIME = Time.newInstance(System.now().hour(),System.now().minute(),System.now().second(),System.now().millisecond());
 	/** Stores time value for midnight */
 	private static final Time MIDNIGHT = Time.newInstance(0, 0, 0, 0);
-	/** Stores datetime representation of midnight on the current day in the running user's locale */
-	private static final DateTime TODAY_DT_START = DateTime.newInstance(System.today(), MIDNIGHT);
+	/** Stores datetime representation of midnight on the epoch during tests and midnight on the current day in the running user's locale otherwise */
+	private static final DateTime TODAY_DT_START = ( Test.isRunningTest() ) ? DateTime.newInstance(1970,1,1) : DateTime.newInstance(System.today(), MIDNIGHT);
 	/** Mapping of date literal period by their corresponding datetime start boundary for the current period */
 	private static final Map<String,DateTime> PERIOD_BY_DT_START;
 	/** Mapping of date literal periods by their corresponding datetime end boundary for the current period */
 	private static final Map<String,DateTime> PERIOD_BY_DT_END;
 	/** Static code block for initializing PERIOD_BY maps */
-	static {
+	static
+	{
 		Map<Integer,Integer> MONTH_BY_QUARTER = new Map<Integer,Integer>{1 => 1, 2 => 1, 3 => 1, 4 => 2, 5 => 2, 6 => 2, 7 => 3, 8 => 3, 9 => 3, 10 => 4, 11 => 4, 12 => 4};
 		Map<Integer,Integer> MONTH_BY_HALF_YEAR = new Map<Integer,Integer>{1 => 1, 2 => 1, 3 => 1, 4 => 1, 5 => 1, 6 => 1, 7 => 2, 8 => 2, 9 => 2, 10 => 2, 11 => 2, 12 => 2};
 		Map<Integer,Integer> QUARTER_BY_HALF_YEAR_START_OFFSET = new Map<Integer,Integer>{1 => 0, 2 => -3, 3 => 0, 4 => -3};
@@ -45,11 +50,19 @@ public with sharing class DateService
 			'HALF_YEAR' => DateTime.newInstance(TODAY_DT_START.year(), 1 + (6*(MONTH_BY_HALF_YEAR.get(TODAY_DT_START.month()) - 1)), 1),
 			'YEAR' => DateTime.newInstance(TODAY_DT_START.year(), 1, 1)
 		};
-		for (Period p : [SELECT Type, Number, StartDate FROM Period WHERE StartDate <= TODAY AND EndDate >= TODAY AND (Type = 'Year' OR Type = 'Quarter')])
+		// During tests simulate a fiscal year that starts in September
+		if (Test.isRunningTest())
 		{
-			PERIOD_BY_DT_START.put('FISCAL_'+p.Type.toUpperCase(), DateTime.newInstance(p.StartDate, MIDNIGHT));
-			if (p.Type.toUpperCase() == 'QUARTER')
-				PERIOD_BY_DT_START.put('FISCAL_HALF_YEAR', DateTime.newInstance(p.StartDate.addMonths(QUARTER_BY_HALF_YEAR_START_OFFSET.get(p.Number)), MIDNIGHT));
+			PERIOD_BY_DT_START.putALL(new Map<String,DateTime>{ 'FISCAL_QUARTER' => DateTime.newInstance(Date.newInstance(1969, 12, 1), MIDNIGHT), 'FISCAL_HALF_YEAR' => DateTime.newInstance(Date.newInstance(1969, 9, 1), MIDNIGHT), 'FISCAL_YEAR' => DateTime.newInstance(Date.newInstance(1969, 9, 1), MIDNIGHT) });
+		}
+		else
+		{
+			for (Period p : [SELECT Type, Number, StartDate FROM Period WHERE StartDate <= TODAY AND EndDate >= TODAY AND (Type = 'Year' OR Type = 'Quarter')])
+			{
+				PERIOD_BY_DT_START.put('FISCAL_'+p.Type.toUpperCase(), DateTime.newInstance(p.StartDate, MIDNIGHT));
+				if (p.Type.toUpperCase() == 'QUARTER')
+					PERIOD_BY_DT_START.put('FISCAL_HALF_YEAR', DateTime.newInstance(p.StartDate.addMonths(QUARTER_BY_HALF_YEAR_START_OFFSET.get(p.Number)), MIDNIGHT));
+			}
 		}
 		PERIOD_BY_DT_END = new Map<String,DateTime>{
 			'YESTERDAY' => PERIOD_BY_DT_START.get('YESTERDAY').addDays(1),
@@ -94,7 +107,7 @@ public with sharing class DateService
 		if ( !dl.name().contains(N_ID) && !dl.name().contains(AGO_ID) )
 			return dateLiteralToDateTimeMap(dl);
 		if (numPeriods == null || numPeriods == 0)			
-			throw new CustomException('DateService Error: You must specify an \'N\' value for this date literal!');
+			throw new CustomException(UNSPECIFIED_N_ERROR_MESSAGE);
 		return buildDateTimeMap(dl.name(), numPeriods);
 	}
 
@@ -257,7 +270,7 @@ public with sharing class DateService
 				if ( dlId != AGO_ID )
 				{
 					offset = NAME_BY_OFFSET.get(dlName.substring(0,idIndex));
-					period = dlName.substring(idIndex + dlId.length(), dlName.length());					
+					period = dlName.substring(idIndex + dlId.length(), dlName.length());
 				}
 				else
 				{
@@ -294,7 +307,7 @@ public with sharing class DateService
 			{
 				startDT = startDT.addDays(offset * numPeriods);
 				// LAST_N_DAYS date literals are unique in that their end boundaries actually continue up to the current second
-				endDT = ( dlName.contains(AGO_ID) ) ? endDT.addDays(offset * numPeriods) : System.now();
+				endDT = ( dlName.contains(AGO_ID) ) ? endDT.addDays(offset * numPeriods) : ( Test.isRunningTest() ) ? Datetime.newInstance(TODAY_DT_START.date(),Time.newInstance(TEST_TIME.hour(), TEST_TIME.minute(), TEST_TIME.second(), TEST_TIME.millisecond())) : Datetime.newInstance(TODAY_DT_START.date(),Time.newInstance(System.now().hour(), System.now().minute(), System.now().second(), System.now().millisecond()));
 			}				
 			else if ( offset > 0 ){
 				startDT = startDT.addDays(1);
@@ -372,7 +385,7 @@ public with sharing class DateService
     * @param String Determines if the given datetime value is to represent a start or end boundary for the eventual datetime map
     * @return DateTime Datetime value adjusted for possible DST issues
     */
-	private static DateTime convertDateTimeForDST(DateTime originalDT, String type)
+	@TestVisible private static DateTime convertDateTimeForDST(DateTime originalDT, String type)
 	{
 		// Start boundaries should always be 12:00
 		if (originalDT.hour()==1 && type == START_KEY)
