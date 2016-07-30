@@ -1,0 +1,15 @@
+<h1>Apex DateService</h1>
+<p>This utility class was built to provide the same date literal values that Salesforce built for SOQL queries in generic Apex.</p>
+<p>The class supports all date literals found in the <a href="https://help.salesforce.com/apex/HTViewHelpDoc?id=custom_dates.htm&language=en">old documentation</a> (screnshots below), which includes all those in the <a href="https://developer.salesforce.com/docs/atlas.en-us.soql_sosl.meta/soql_sosl/sforce_api_calls_soql_select_dateformats.htm">new documentation</a> as well as a few others. In addition, I've added support for half years & fiscal half years.</p>
+<p><img src="https://cloud.githubusercontent.com/assets/524857/17267057/36a070e2-55b6-11e6-89c2-3373515bb2a0.png" alt="DateLiterals"/></p>
+<p><img src="https://cloud.githubusercontent.com/assets/524857/17267058/3c82a278-55b6-11e6-808e-89f7dd8a1a61.png" alt="DateLiterals2"/></p>
+<p><img src="https://cloud.githubusercontent.com/assets/524857/17267059/40d1d3bc-55b6-11e6-88fb-05168f5b8c6d.png" alt="DateLiterals3"/></p>
+<p>The boundaries returned by DateService are an inclusive representation of given date literals and can be used like so:</p>
+<i>
+<p>Map<String,DateTime> tomorrowBoundaryByDateTime = DateService.dateLiteralToDateTimeMap(DateLiteral.TOMORROW);</p>
+<p>DateTime lastTwoMonthsStartBoundary = DateService.dateLiteralToStartDateTime(DateLiteral.LAST_N_MONTHS,2);</p>
+<p>Date endSevenFiscalYearsBoundary = DateService.dateLiteralToEndDate(DateLiteral.NEXT_N_FISCAL_YEARS,7);</p>
+<p>System.assertEquals( endSevenFiscalYearsBoundary, DateService.dateLiteralToDateMap(DateLiteral.NEXT_N_FISCAL_YEARS,7).get(DateService.END_KEY) );</p>
+</i>
+<p><a href="http://scottbcovert.github.io/apex-dateservice/">Documentation</a> was created using ApexDocs (originally developed by Aslam Bari and later improved by Steve Cox) and has been included in the project</p>
+<p>Happy Coding!</p>

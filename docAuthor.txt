@@ -1,0 +1,2 @@
+projectName = Apex DateService
+author = Scott Covert <a href="mailto:scott.b.covert@gmail.com?Subject=Apex%20Date%20Service"> (scott.b.covert@gmail.com)</a>
