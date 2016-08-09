@@ -13,6 +13,8 @@ public with sharing class DateService
 	@TestVisible private static final String N_ID = '_N_';
 	/** Identifier for date literal containing _AGO */
 	@TestVisible private static final String AGO_ID = '_AGO';
+	/** Identifier for date literal containing _FROM_NOW */
+	@TestVisible private static final String FROM_NOW_ID = '_FROM_NOW';
 	/** Identifier for date literal containing _FISCAL_ */
 	private static final String FISCAL_ID = '_FISCAL';
 	/** Identifier for date literal containing _90_ */
@@ -20,7 +22,7 @@ public with sharing class DateService
 	/** Message to relay unspecified n error */
 	@TestVisible private static final String UNSPECIFIED_N_ERROR_MESSAGE = 'DateService Error: You must specify an \'N\' value for this date literal!';
 	/** List of date literal identifier values */
-	private static final List<String> DL_IDS = new List<String>{ N_ID, AGO_ID, FISCAL_ID, '_' };	
+	private static final List<String> DL_IDS = new List<String>{ N_ID, AGO_ID, FROM_NOW_ID, FISCAL_ID, '_' };	
 	/** Mapping of offset names by corresponding integer values for date literals */
 	private static final Map<String,Integer> NAME_BY_OFFSET = new Map<String,Integer>{ 'LAST' => -1, 'THIS' => 0, 'NEXT' => 1};
 	/** List of special single day date literals */
@@ -65,7 +67,7 @@ public with sharing class DateService
 				if (p.Type.toUpperCase() == 'QUARTER')
 					PERIOD_BY_DT_START.put('FISCAL_HALF_YEAR', DateTime.newInstance(p.StartDate.addMonths(QUARTER_BY_HALF_YEAR_START_OFFSET.get(p.Number)), MIDNIGHT));
 			}
-		}
+		}		
 		PERIOD_BY_DT_END = new Map<String,DateTime>{
 			'YESTERDAY' => PERIOD_BY_DT_START.get('YESTERDAY').addDays(1),
 			'TODAY' => PERIOD_BY_DT_START.get('TODAY').addDays(1),
@@ -91,7 +93,7 @@ public with sharing class DateService
     */
 	public static Map<String,DateTime> dateLiteralToDateTimeMap(DateLiteral dl)
 	{
-		if ( dl.name().contains(N_ID) || dl.name().contains(AGO_ID) )
+		if ( dl.name().contains(N_ID) || dl.name().contains(AGO_ID) || dl.name().contains(DateService.FROM_NOW_ID))
 			return dateLiteralToDateTimeMap(dl, 0);		
 		return buildDateTimeMap(dl.name(),1);
 	}
@@ -106,7 +108,7 @@ public with sharing class DateService
     */
 	public static Map<String,DateTime> dateLiteralToDateTimeMap(DateLiteral dl, Integer numPeriods)
 	{
-		if ( !dl.name().contains(N_ID) && !dl.name().contains(AGO_ID) )
+		if ( !dl.name().contains(N_ID) && !dl.name().contains(AGO_ID) && !dl.name().contains(FROM_NOW_ID) )
 			return dateLiteralToDateTimeMap(dl);
 		if (numPeriods == null || numPeriods == 0)			
 			throw new CustomException(UNSPECIFIED_N_ERROR_MESSAGE);
@@ -234,7 +236,7 @@ public with sharing class DateService
     * @return Date End boundary for the given date literal
     */
 	public static Date dateLiteralToEndDate(DateLiteral dl, Integer numPeriods)
-	{
+	{		
 		return dateLiteralToDateMap(dl,numPeriods).get(END_KEY);
 	}
 
@@ -249,16 +251,16 @@ public with sharing class DateService
 	private static Map<String,DateTime> buildDateTimeMap(String dlName, Integer numPeriods)
 	{
 		// LAST/NEXT_90_DAYS date literals are really just instances of the LAST/NEXT_N_DAYS date literals
-		if ( dlName.contains(NINETY_ID) && dlName.contains(new List<String>(NAME_BY_OFFSET.keySet())[0]) )
-			return buildDateTimeMap(DateLiteral.LAST_N_DAYS.name(), 90);
-		else if ( dlName.contains(NINETY_ID) )
-			return buildDateTimeMap(DateLiteral.NEXT_N_DAYS.name(), 90);
+		if ( dlName.contains(NINETY_ID) && dlName.contains(new List<String>(NAME_BY_OFFSET.keySet())[0]) )		
+			return buildDateTimeMap(DateLiteral.LAST_N_DAYS.name(), 90);		
+		else if ( dlName.contains(NINETY_ID) )					
+			return buildDateTimeMap(DateLiteral.NEXT_N_DAYS.name(), 90);		
 		// Special single day date literals
 		for (String dayKey : DAY_PERIODS)
 		{
 			if ( dlName == dayKey )
 			{
-				return new Map<String,DateTime>{ START_KEY => convertDateTimeForDST( PERIOD_BY_DT_START.get(dayKey), START_KEY ), END_KEY => convertDateTimeForDST( DateTime.newInstance(PERIOD_BY_DT_END.get(dayKey).getTime()-1), END_KEY ) };			
+				return new Map<String,DateTime>{ START_KEY => convertDateTimeForDST( PERIOD_BY_DT_START.get(dayKey), START_KEY ), END_KEY => convertDateTimeForDST( DateTime.newInstance(PERIOD_BY_DT_END.get(dayKey).getTime()-1), END_KEY ) };
 			}
 		}
 		// Iterating through the date literal identifier list allows for breaking down date literals into their component parts
@@ -269,22 +271,23 @@ public with sharing class DateService
 			{
 				Integer offset;
 				String period;
-				if ( dlId != AGO_ID )
+				if ( dlId != AGO_ID && dlId != FROM_NOW_ID)
 				{
 					offset = NAME_BY_OFFSET.get(dlName.substring(0,idIndex));
-					period = ( dlId == FISCAL_ID ) ? FISCAL_ID.substring(1,FISCAL_ID.length()) + dlName.substring(idIndex + dlId.length(), dlName.length()) : dlName.substring(idIndex + dlId.length(), dlName.length());
+					period = ( dlId == FISCAL_ID ) ? FISCAL_ID.substring(1,FISCAL_ID.length()) + dlName.substring(idIndex + dlId.length(), dlName.length()) : dlName.substring(idIndex + dlId.length(), dlName.length());					
 				}
 				else
 				{
-					offset = -1;
 					period = dlName.substring(2, idIndex);
+					// Offset is either one period back for AGO_ID or one period ahead for FROM_NOW_ID
+					offset = (dlId == AGO_ID) ? -1 : 1;
 				}
 				if ( period.endsWith('S') )
-					period = period.substring(0, period.length()-1);
+					period = period.substring(0, period.length()-1);				
 				return buildDateTimeMap(dlName,period,offset,numPeriods);	
 			}
 		}
-		throw new CustomException('DateService Error: Unhandled date literal value!');
+		throw new CustomException('DateService Error: Unhandled date literal value!');		
 		return null;
 	}
 
@@ -312,8 +315,8 @@ public with sharing class DateService
 				endDT = ( dlName.contains(AGO_ID) ) ? endDT.addDays(offset * numPeriods) : ( Test.isRunningTest() ) ? Datetime.newInstance(TODAY_DT_START.date(),Time.newInstance(TEST_TIME.hour(), TEST_TIME.minute(), TEST_TIME.second(), TEST_TIME.millisecond())) : Datetime.newInstance(TODAY_DT_START.date(),Time.newInstance(System.now().hour(), System.now().minute(), System.now().second(), System.now().millisecond()));
 			}				
 			else if ( offset > 0 ){
-				startDT = startDT.addDays(1);
-				endDT = startDT.addDays(offset * numPeriods);				
+				startDT = ( dlName.contains(FROM_NOW_ID) ) ? startDT.addDays(numPeriods) : startDT.addDays(1);
+				endDT = ( dlName.contains(FROM_NOW_ID) ) ? startDT.addDays(1) : startDT.addDays(offset * numPeriods);				
 			}
 		}
 		else if (periodType == 'WEEK')
@@ -324,8 +327,8 @@ public with sharing class DateService
 				endDT = ( dlName.contains(AGO_ID) ) ? endDT.addDays(7 * offset * numPeriods) : endDT;
 			}				
 			else if ( offset > 0 ){
-				startDT = startDT.addDays(7);
-				endDT = startDT.addDays(7 * offset * numPeriods);
+				startDT = ( dlName.contains(FROM_NOW_ID) ) ? startDT.addDays(7 * numPeriods) : startDT.addDays(7);
+				endDT = ( dlName.contains(FROM_NOW_ID) ) ? startDT.addDays(7) : startDT.addDays(7 * offset * numPeriods);
 			}
 		}
 		else if (periodType == 'MONTH')
@@ -336,8 +339,8 @@ public with sharing class DateService
 				endDT = ( dlName.contains(AGO_ID) ) ? endDT.addMonths(offset * numPeriods) : endDT;
 			}
 			else if ( offset > 0 ){
-				startDT = startDT.addMonths(1);
-				endDT = startDT.addMonths(offset * numPeriods);
+				startDT = ( dlName.contains(FROM_NOW_ID) ) ? startDT.addMonths(numPeriods) : startDT.addMonths(1);
+				endDT = ( dlName.contains(FROM_NOW_ID) ) ? startDT.addMonths(1) : startDT.addMonths(offset * numPeriods);
 			}
 		}
 		else if (periodType.contains('QUARTER'))
@@ -347,8 +350,8 @@ public with sharing class DateService
 				endDT = ( dlName.contains(AGO_ID) ) ? endDT.addMonths(3 * offset * numPeriods) : endDT;
 			}
 			else if ( offset > 0 ){
-				startDT = startDT.addMonths(3);
-				endDT = startDT.addMonths(3 * offset * numPeriods);
+				startDT = ( dlName.contains(FROM_NOW_ID) ) ? startDT.addMonths(3 * numPeriods) : startDT.addMonths(3);
+				endDT = ( dlName.contains(FROM_NOW_ID) ) ? startDT.addMonths(3) : startDT.addMonths(3 * offset * numPeriods);
 			}
 		}
 		else if (periodType.contains('HALF_YEAR'))
@@ -359,8 +362,8 @@ public with sharing class DateService
 				endDT = ( dlName.contains(AGO_ID) ) ? endDT.addMonths(6 * offset * numPeriods) : endDT;
 			}
 			else if ( offset > 0 ){
-				startDT = startDT.addMonths(6);
-				endDT = startDT.addMonths(6 * offset * numPeriods);
+				startDT = ( dlName.contains(FROM_NOW_ID) ) ? startDT.addMonths(6 * numPeriods) : startDT.addMonths(6);
+				endDT = ( dlName.contains(FROM_NOW_ID) ) ? startDT.addMonths(6) : startDT.addMonths(6 * offset * numPeriods);
 			}
 		}
 		else if (periodType.contains('YEAR'))
@@ -371,10 +374,10 @@ public with sharing class DateService
 				endDT = ( dlName.contains(AGO_ID) ) ? endDT.addYears(offset * numPeriods) : endDT;
 			}
 			else if ( offset > 0 ){
-				startDT = startDT.addYears(1);
-				endDT = startDT.addYears(offset * numPeriods);
+				startDT = ( dlName.contains(FROM_NOW_ID) ) ? startDT.addYears(numPeriods) : startDT.addYears(1);
+				endDT = ( dlName.contains(FROM_NOW_ID) ) ? startDT.addYears(1) : startDT.addYears(offset * numPeriods);
 			}
-		}
+		}		
 		// LAST_N_DAYS date literals should not have their end boundaries tampered with, again because they actually continue up to the current second
 		return new Map<String,DateTime>{ START_KEY => convertDateTimeForDST( startDT, START_KEY ), END_KEY => (periodType == 'DAY' && offset < 0 && !dlName.contains(AGO_ID) ) ? endDT : convertDateTimeForDST( DateTime.newInstance(endDT.getTime()-1), END_KEY ) };
 	}
@@ -388,7 +391,7 @@ public with sharing class DateService
     * @return DateTime Datetime value adjusted for possible DST issues
     */
 	@TestVisible private static DateTime convertDateTimeForDST(DateTime originalDT, String type)
-	{
+	{		
 		// Start boundaries should always be 12:00
 		if (originalDT.hour()==1 && type == START_KEY)
 			return originalDT.addHours(-1);

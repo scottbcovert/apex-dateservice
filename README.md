@@ -1,7 +1,7 @@
 # Apex DateService
 This utility class was built to provide the same date literal values that Salesforce built for SOQL queries in generic Apex.
 
-The class supports all date literals found in the [old documentation](https://help.salesforce.com/apex/HTViewHelpDoc?id=custom_dates.htm&language=en) (screnshots below), which includes all those in the [new documentation](https://developer.salesforce.com/docs/atlas.en-us.soql_sosl.meta/soql_sosl/sforce_api_calls_soql_select_dateformats.htm) as well as a few others. In addition, I've added support for half years & fiscal half years.
+The class supports all date literals found in the [old documentation](https://help.salesforce.com/apex/HTViewHelpDoc?id=custom_dates.htm&language=en) (screnshots below), which includes all those in the [new documentation](https://developer.salesforce.com/docs/atlas.en-us.soql_sosl.meta/soql_sosl/sforce_api_calls_soql_select_dateformats.htm) as well as a few others. In addition, I've added support for half years, fiscal half years, & N [Period Type]S FROM NOW.
 
 ![DateLiterals](https://cloud.githubusercontent.com/assets/524857/17267057/36a070e2-55b6-11e6-89c2-3373515bb2a0.png)
 
